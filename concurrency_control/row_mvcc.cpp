@@ -39,6 +39,10 @@ void Row_mvcc::init(row_t * row) {
 	preq_len = 0;
 }
 
+// mvcc行版本链 , tail为最老的版本，即时间戳最小
+// 读和写分开存链
+// @input type是指要清除的版本是读还是写， ts是指到该ts为止的版本都清除
+// @return 返回离指定ts最近的一个row
 row_t * Row_mvcc::clear_history(TsType type, ts_t ts) {
 	MVHisEntry ** queue;
 	MVHisEntry ** tail;
@@ -50,6 +54,7 @@ row_t * Row_mvcc::clear_history(TsType type, ts_t ts) {
 	MVHisEntry * his = *tail;
 	MVHisEntry * prev = NULL;
 	row_t * row = NULL;
+	// 从尾巴开始向前清除，最后一个历史版本的row不清除（不清楚为啥）
 	while (his && his->prev && his->prev->ts < ts) {
 		prev = his->prev;
 		assert(prev->ts >= his->ts);
@@ -107,7 +112,8 @@ void Row_mvcc::buffer_req(TsType type, TxnManager * txn)
 		STACK_PUSH(prereq_mvcc, req_entry);
 	}
 }
-
+// 依据请求种类，若为读请求，返回小于P队列最小时间戳的所有读请求；
+// 若为p请求，返回txn对应的请求
 // for type == R_REQ 
 //	 debuffer all non-conflicting requests
 // for type == P_REQ
@@ -123,7 +129,7 @@ MVReqEntry * Row_mvcc::debuffer_req( TsType type, TxnManager * txn) {
 	
 	MVReqEntry * req = *queue;
 	MVReqEntry * prev_req = NULL;
-	if (txn != NULL) {
+	if (txn != NULL) {//  只移除该txn
 		assert(type == P_REQ);
 		while (req != NULL && req->txn != txn) {		
 			prev_req = req;
@@ -132,23 +138,25 @@ MVReqEntry * Row_mvcc::debuffer_req( TsType type, TxnManager * txn) {
 		assert(req != NULL);
 		if (prev_req != NULL)
 			prev_req->next = req->next;
-		else {
+		else { //  说明req在队头
 			assert( req == *queue );
 			*queue = req->next;
 		}
 		preq_len --;
 		req->next = return_queue;
 		return_queue = req;
-	} else {
+	} else {  // 
 		assert(type == R_REQ);
 		// should return all non-conflicting read requests
 		// The following code makes the assumption that each write op
 		// must read the row first. i.e., there is no write-only operation.
 		uint64_t min_pts = UINT64_MAX;
 		//uint64_t min_pts = (1UL << 32);
+		//  找到pre请求队列中最小的时间戳min_pts
 		for (MVReqEntry * preq = prereq_mvcc; preq != NULL; preq = preq->next)
 			if (preq->ts < min_pts)
 				min_pts = preq->ts;
+				//  把read请求队列中小于min_pts的都移除放到最终返回结果队列中
 		while (req != NULL) {
 			if (req->ts <= min_pts) {
 				if (prev_req == NULL) {
@@ -172,29 +180,30 @@ MVReqEntry * Row_mvcc::debuffer_req( TsType type, TxnManager * txn) {
 
 void Row_mvcc::insert_history( ts_t ts, row_t * row) 
 {
-	MVHisEntry * new_entry = get_his_entry(); 
+	MVHisEntry * new_entry = get_his_entry();  //  获取历史entry，实际上是申请分配新空间
 	new_entry->ts = ts;
 	new_entry->row = row;
-	if (row != NULL)
+	if (row != NULL) //  说明是插入事务的更新操作
 		whis_len ++;
-	else rhis_len ++;
+	else rhis_len ++; // 插入读操作
 	MVHisEntry ** queue = (row == NULL)? 
 		&(readhis) : &(writehis);
 	MVHisEntry ** tail = (row == NULL)?
 		&(readhistail) : &(writehistail);
 	MVHisEntry * his = *queue;
+	//  找到适合的插入的位置
 	while (his != NULL && ts < his->ts) {
 		his = his->next;
 	}
 
-	if (his) {
+	if (his) { //  插入到该版本之前 （按时间戳排序的链表）
 		LIST_INSERT_BEFORE(his, new_entry,(*queue));					
 		//if (his == *queue)
 		//	*queue = new_entry;
-	} else 
+	} else //说明之前的版本的时间戳均小于要插入的版本
 		LIST_PUT_TAIL((*queue), (*tail), new_entry);
 }
-
+//  检测写之前是否有读取操作
 bool Row_mvcc::conflict(TsType type, ts_t ts) {
 	// find the unique prewrite-read couple (prewrite before read)
 	// if no such couple found, no conflict. 
@@ -259,7 +268,8 @@ RC Row_mvcc::access(TxnManager * txn, TsType type, row_t * row) {
 			txn->ts_ready = false;
 		} else if (conf) { 
 			rc = Abort;
-			printf("\nshould never happen. rreq_len=%ld", rreq_len);
+			printf("\n
+			should never happen. rreq_len=%ld", rreq_len);
 		} else {
 			// return results immediately.
 			rc = RCOK;

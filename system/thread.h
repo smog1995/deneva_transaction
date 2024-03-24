@@ -41,6 +41,8 @@ public:
     // the following function must be in the form void* (*)(void*)
     // to run with pthread.
     // conversion is done within the function.
+    // 下面的函数必须以void* (*)(void*)的形式与pthread一起运行。
+    // 转换在函数内部完成。
     virtual RC run() = 0;
     virtual void setup() = 0;
 

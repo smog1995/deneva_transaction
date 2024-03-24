@@ -259,11 +259,12 @@ RC Row_mvcc::access(TxnManager * txn, TsType type, row_t * row) {
 		pthread_mutex_lock( latch );
   if (type == R_REQ) {
 		// figure out if ts is in interval(prewrite(x))
+		// 计算它是否在间隔(prewrite(x))内
 		bool conf = conflict(type, ts);
 		if ( conf && rreq_len < g_max_read_req) {
 			rc = WAIT;
       //txn->wait_starttime = get_sys_clock();
-        DEBUG("buf R_REQ %ld %ld\n",txn->get_txn_id(),_row->get_primary_key());
+      DEBUG("buf R_REQ %ld %ld\n",txn->get_txn_id(),_row->get_primary_key());
 			buffer_req(R_REQ, txn);
 			txn->ts_ready = false;
 		} else if (conf) { 
@@ -320,6 +321,9 @@ RC Row_mvcc::access(TxnManager * txn, TsType type, row_t * row) {
 			// But we cannot recycle that version because it is still being used.
 			// So the HACK here is to make sure that the first version older than
 			// t_th not be recycled.
+			// 这里有一个棘手的bug。最旧的事务可能正在读取时间戳< t_th的更旧的版本。
+			// 但是我们不能回收这个版本，因为它还在使用。
+			// 这里的HACK是为了确保第一个比t_th老的版本不会被回收。
 			if (whis_len > 1 && 
 				writehistail->prev->ts < t_th) {
 				row_t * latest_row = clear_history(W_REQ, t_th);

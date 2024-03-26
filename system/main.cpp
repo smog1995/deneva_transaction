@@ -267,7 +267,7 @@ int main(int argc, char* argv[])
       pthread_create(&p_thds[id++], &attr, run_thread, (void *)&worker_thds[i]);
 	}
 	for (uint64_t j = 0; j < rthd_cnt ; j++) {
-	    assert(id >= wthd_cnt && id < wthd_cnt + rthd_cnt);
+	    assert(id >= wthd_cnt && id < wthd_cnt + rth d_cnt);
 	    input_thds[j].init(id,g_node_id,m_wl);
 	    pthread_create(&p_thds[id++], NULL, run_thread, (void *)&input_thds[j]);
 	}

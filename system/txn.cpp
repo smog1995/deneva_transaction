@@ -774,7 +774,7 @@ void TxnManager::cleanup(RC rc) {
         INC_STATS(get_thd_id(), abort_time, get_sys_clock() - starttime);
 	} 
 }
-
+//  calvin需要提前获取数据锁
 RC TxnManager::get_lock(row_t * row, access_t type) {
     if (calvin_locked_rows.contains(row)) {
         return RCOK;
@@ -796,7 +796,7 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
     access_pool.get(get_thd_id(),access);
     //uint64_t row_cnt = txn->row_cnt;
     //assert(txn->accesses.get_count() - 1 == row_cnt);
-
+    //  会记录上一个row
     this->last_row = row;
     this->last_type = type;
 

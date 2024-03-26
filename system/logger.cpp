@@ -80,7 +80,6 @@ void Logger::processRecord(uint64_t thd_id) {
     if(record->rcd.iud == L_NOTIFY) {
       flushBuffer(thd_id);
       work_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),false);
-
     }
     writeToBuffer(thd_id,record);
     //writeToBuffer((char*)(&record->rcd),sizeof(record->rcd));
